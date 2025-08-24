@@ -9,17 +9,7 @@ LCD pins: 43 38 39 40 41 42
 
 
 /*Program to run Eskedalen Brewery
-
-
 Task list
-1. Create an array of Solenoid control relay pins
-2. Set them as outputs
-3. Create fluid control pins and set them as inputs and setup hardware
-4. Create the wifi setup
-5. Create an LCD to print info on
-6. Connect temperature sensors
-7. Creating an interactive menu*
-8. Add RTC-clock module
 9. Vill spara en brygglogg till EEPROM. För varje bryggning är detta vad jag vill spara: 
 
 a) Datum
