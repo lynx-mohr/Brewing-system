@@ -1026,13 +1026,13 @@ void page_SubMenu10_enter() {
 void page_SubMenu10_loop() {
   unsigned long now = millis();
 
-  // Efter 4 sekunder, gå från preset-vy till "kör"-vy
+  // After 4 sek, go from presets-view to running-view
   if (sm10_showingPreset && now - sm10_startPresetMs >= 4000UL) {
     sm10_showingPreset = false;
     lcd.clear();
   }
 
-  // Uppdatera fyllnings-info tills volymen är nådd
+  // update filling info on lcd until volume is reached
   if (!sm10_showingPreset && !volumeReached && now - sm10_lastUpdateMs >= 1000UL) {
     sm10_lastUpdateMs = now;
 
@@ -1085,7 +1085,7 @@ void page_SubMenu10_loop() {
   // --- Värmestyrning ---
   if (volumeReached) {
     sensors.requestTemperatures();
-    float temp = sensors.getTempCByIndex(0);
+   float temp = sensors.getTempCByIndex(0);
 
     lcd.setCursor(0, 0);
     lcd.print("Temp: ");
@@ -1117,8 +1117,31 @@ void page_SubMenu10_loop() {
       digitalWrite(RELAY_PIN, LOW);
       heatingOn = false;
     }
+
+     // Stabilitetskrav innan vi startar överföringen (t.ex. ±0.3°C i 5s)
+  static unsigned long strikeStableMs = 0;
+  const float READY_BAND = 0.3;
+  const unsigned long HOLD_TIME = 5000;
+
+  static bool strikeReady = false;
+  if (fabs(temp - strikeTemp) <= READY_BAND) {
+    if (strikeStableMs == 0) strikeStableMs = millis();
+    if (!strikeReady && millis() - strikeStableMs >= HOLD_TIME) {
+      strikeReady = true;
+      // stäng av värmaren innan vi börjar tömma
+      digitalWrite(RELAY_PIN, LOW);
+      heatingOn = false;
+      startTransferToMash();        // <--- STARTA överföring
+    }
+  } else {
+    strikeStableMs = 0;
   }
+
+  lcd.setCursor(0, 2);
+  lcd.print(strikeReady ? "Strike READY     " : "Heating...       ");
 }
+  }
+
   
 
 
@@ -1205,6 +1228,42 @@ void page_SubMenu10() {
 }
 */
 
+void startTransferToMash() {
+  transferring = true;
+
+  // Öppna utgående ventil
+  digitalWrite(VALVE_STRIKE_OUT, HIGH);
+
+  // Nollställ ev. utflödesmätning
+#if HAS_OUTFLOW_SENSOR
+  noInterrupts();
+  pulseCountOut = 0;
+  interrupts();
+  litersOut = 0.0;
+  lastPulsesOut = 0;
+  lastOutUpdateMs = millis();
+#endif
+
+  lcd.clear();
+  lcd.setCursor(0,0); lcd.print("Transferring ->");
+  lcd.setCursor(0,1); lcd.print("Mash tun");
+  lcd.setCursor(0,2); lcd.print("Target: ");
+  lcd.print(targetVolume,1); lcd.print("L   ");
+
+#if HAS_OUTFLOW_SENSOR
+  lcd.setCursor(0,3); lcd.print("Out: 0.0L  Press CAN to stop");
+#else
+  lcd.setCursor(0,3); lcd.print("Press ACCEPT to stop");
+#endif
+}
+
+void stopTransferToMash() {
+  digitalWrite(VALVE_STRIKE_OUT, LOW);
+  transferring = false;
+
+  lcd.setCursor(0,3); lcd.print("Transfer done     ");
+  // Här kan du t.ex. sätta currPage = SUB_MENU?? för nästa steg
+}
 
 
 // ******************************************************************
@@ -1232,11 +1291,3 @@ bool btnIsUp(int btn){
 return digitalRead(btn) == HIGH && digitalRead(btn) == HIGH;
 
 } 
-
-//Plays a short tone when button is pressed
-void playTone(){
-
-    tone(BUZZER_PIN, 3000);
-  delay(100);
-  noTone(BUZZER_PIN);
-}
